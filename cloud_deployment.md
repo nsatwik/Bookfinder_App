@@ -136,6 +136,16 @@ API URL format:
 https://<api-id>.execute-api.ap-south-1.amazonaws.com/prod
 ```
 
+
+### If API Gateway returns 503 (common with public ALB + VPC Link)
+Use **HTTP Proxy (INTERNET)** integration directly to the ALB DNS and ensure the path is preserved:
+
+```bash
+aws apigatewayv2 create-integration   --api-id <API_ID>   --integration-type HTTP_PROXY   --integration-method ANY   --integration-uri "http://<ALB_DNS>"   --payload-format-version "1.0"   --request-parameters '{"overwrite:path":"$request.path"}'   --region ap-south-1
+```
+
+Then route `ANY /{proxy+}` to that integration.
+
 ## 7) Frontend (S3 + CloudFront)
 
 ### Build and upload
