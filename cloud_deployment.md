@@ -146,6 +146,34 @@ aws apigatewayv2 create-integration   --api-id <API_ID>   --integration-type HTT
 
 Then route `ANY /{proxy+}` to that integration.
 
+
+### AWS CLI (full API creation)
+Replace placeholders before running.
+
+```bash
+export AWS_REGION=ap-south-1
+export API_NAME=bookfinder-api
+export LISTENER_ARN=<ALB_LISTENER_ARN>
+export VPC_LINK_NAME=bookfinder-vpc-link
+
+# Get VPC Link ID by name
+VPC_LINK_ID=$(aws apigatewayv2 get-vpc-links   --region $AWS_REGION   --query "Items[?Name=='$VPC_LINK_NAME'].VpcLinkId | [0]"   --output text)
+
+# Create API
+API_ID=$(aws apigatewayv2 create-api   --name $API_NAME   --protocol-type HTTP   --region $AWS_REGION   --query "ApiId" --output text)
+
+# Create integration (VPC Link + ALB listener)
+INTEG_ID=$(aws apigatewayv2 create-integration   --api-id $API_ID   --integration-type HTTP_PROXY   --integration-method ANY   --connection-type VPC_LINK   --connection-id $VPC_LINK_ID   --integration-uri $LISTENER_ARN   --payload-format-version "1.0"   --region $AWS_REGION   --query "IntegrationId" --output text)
+
+# Create route + stage
+aws apigatewayv2 create-route   --api-id $API_ID   --route-key "ANY /{proxy+}"   --target "integrations/$INTEG_ID"   --region $AWS_REGION
+
+aws apigatewayv2 create-stage   --api-id $API_ID   --stage-name prod   --auto-deploy   --region $AWS_REGION
+
+# Get API URL
+aws apigatewayv2 get-api   --api-id $API_ID   --region $AWS_REGION   --query "ApiEndpoint" --output text
+```
+
 ## 7) Frontend (S3 + CloudFront)
 
 ### Build and upload
