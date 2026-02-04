@@ -10,9 +10,10 @@ This guide documents the exact deployment flow used for Bookfinder, including lo
 ## 1) Networking (VPC + Subnets + Routes)
 
 ### Subnet layout
-- Public Subnets (ALB + NAT): 2
-- Private App Subnets (ECS): 2
-- Private DB Subnets (RDS): 2
+We created a **new VPC** with **6 subnets**:
+- **Public Subnets (ALB + NAT)**: 2
+- **Private App Subnets (ECS)**: 2
+- **Private DB Subnets (RDS)**: 2
 
 ### Route Tables
 - **Public RT**:
@@ -25,8 +26,17 @@ This guide documents the exact deployment flow used for Bookfinder, including lo
   - `10.0.0.0/16 → local`
   - no internet route
 
+### Subnet associations (important)
+- Public subnets → **Public RT**
+- Private app subnets → **Private App RT**
+- Private DB subnets → **Private DB RT**
+
+### Public subnet settings
+- **Auto-assign public IPv4 = Yes**
+
 ### NAT
-- One NAT Gateway in a public subnet (two NATs for HA if needed)
+- NAT Gateway in a **public subnet** with an **Elastic IP**.
+- For HA, use **two NATs** (one per public subnet) and **split** private app subnets across their own route tables.
 
 ## 2) Security Groups (SG)
 
@@ -50,6 +60,14 @@ Inbound:
 Outbound:
 - Default (all outbound)
 
+### Bastion SG (optional, for admin access)
+Inbound:
+- TCP 22 from **your IP only**
+Outbound:
+- All outbound
+
+Use Bastion SG only for EC2 admin access (never open SSH on ALB/ECS/RDS SGs).
+
 ## 3) RDS MySQL
 
 ### Create DB Subnet Group
@@ -57,7 +75,7 @@ Outbound:
 
 ### Create RDS
 - Engine: MySQL
-- Public access: **No** (can be temporarily Yes if needed)
+- Public access: **No** (can be temporarily **Yes** only for migration and then reverted to **No**)
 - Security group: RDS SG
 
 ## 4) Local MySQL → RDS Migration (mysqldump method)
@@ -84,6 +102,10 @@ mysql -h <RDS_ENDPOINT> -u admin -p bookfinder < bookfinder.sql
 ```bash
 mysql -h <RDS_ENDPOINT> -u admin -p -e "SHOW TABLES;" bookfinder
 ```
+
+### Notes (migration)
+- If you can’t port-forward, **mysqldump + EC2 import** is the cleanest path.
+- Ensure **RDS SG** allows **3306** from the **EC2 SG** used for import.
 
 ## 5) Backend (ECS + ALB)
 
